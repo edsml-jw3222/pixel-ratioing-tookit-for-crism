@@ -1,0 +1,13 @@
+name: crism
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - scipy
+  - numpy
+  - matplotlib
+  - spectral
+  - scikit-learn
+  - imbalanced-learn
+  - pandas
