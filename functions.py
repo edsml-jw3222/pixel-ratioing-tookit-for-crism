@@ -1,29 +1,10 @@
-import os
-import pickle
-import scipy.io
-import requests
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from scipy.signal import medfilt
 
 from spectral.io import envi
+from scipy.signal import medfilt
 
 # all bands of TRDR data
 num_bands = 438
-
-# load model and scaler
-# with open('random_forest_5.pkl', 'rb') as file:
-#     model = pickle.load(file)
-# with open('scaler_5.pkl', 'rb') as f:
-#     scaler = pickle.load(f)
-model_id = "1q_guZfGvkSGCGUq6i4D0FGwE9mA5v_KK"
-model_url = f"https://drive.google.com/uc?export=download&id={model_id}"
-model = pickle.loads(requests.get(model_url).content)
-
-scaler_id = "1Din2B1ft5AKfTLx9LrW_rQYG8R6prTEp"
-scaler_url = f"https://drive.google.com/uc?export=download&id={scaler_id}"
-scaler = pickle.loads(requests.get(scaler_url).content)
 
 def crism_to_mat(hdr_path):
     """
@@ -59,15 +40,15 @@ def crism_to_mat(hdr_path):
 
     return mdict
 
-def filter_bad_pixels(pixspec):
+def filter_bad_pixels(mdict_spec):
     """
     Filters out 'bad' pixels from an image array.
 
     Parameters:
-    pixspec (np.array): The original image array.
+    mdict_spec (np.array): The original spectra array.
 
     Returns:
-    pixspec (np.array): The image array after bad pixels have been filtered and replaced.
+    mdict_spec (np.array): The spectra array after bad pixels have been filtered and replaced.
 
     'Bad' pixels are defined as those that have values greater than 1e3 or are non-finite 
     (i.e., they are either not a number (NaN), positive infinity, or negative infinity). 
@@ -75,24 +56,24 @@ def filter_bad_pixels(pixspec):
     """
 
     # Create a copy of the input array to prevent modifying the original data
-    pixspec = pixspec.copy()
+    mdict_spec = mdict_spec.copy()
 
     # Identify 'bad' pixels
-    bad = (pixspec > 1e3) | ~np.isfinite(pixspec)
+    bad = (mdict_spec > 1e3) | ~np.isfinite(mdict_spec)
 
     # If there are any bad pixels, replace them with the mean of the 'good' pixels
     if np.any(bad):
-        pixspec[bad] = np.mean(pixspec[~bad])
+        mdict_spec[bad] = np.mean(mdict_spec[~bad])
 
-    return pixspec
+    return mdict_spec
 
 
-def remove_spikes_column(mat, image, window_size):
+def remove_spikes_column(mdict, image, window_size):
     """
     Removes 'spikes' in the data using a column-wise median filter.
 
     Parameters:
-    mat (dict): The dictionary containing the image data in 'mat' format.
+    mdict (dict): The dictionary containing the image data in 'mat' format.
     image (np.array): The original image array to be processed.
     window_size (int): The size of the window to be used in the median filter.
 
@@ -104,19 +85,18 @@ def remove_spikes_column(mat, image, window_size):
     """
 
     # Get the dimensions of the image
-    height = np.max(mat['y'])
-    width = np.max(mat['x'])
-    num_channels = len(mat['IF'][0])
+    height = np.max(mdict['y'])
+    width = np.max(mdict['x'])
 
     # Reshape the image to the original dimensions
-    image = image.reshape(height, width, num_channels)
+    image = image.reshape(height, width, num_bands)
     
     # Initialize an empty array of the same shape as the input image to store the processed data
-    result = np.empty((height, width, num_channels))
+    result = np.empty((height, width, num_bands))
 
     # Operate on each column and each channel
     for col in range(width):
-        for ch in range(num_channels):
+        for ch in range(num_bands):
             # Extract the current channel of the current column
             column_channel = image[:, col, ch]
             
@@ -141,7 +121,7 @@ def remove_spikes_column(mat, image, window_size):
     return result.reshape(-1, num_bands)
 
 
-def get_spectrum(hdr_path, pix_coor, ROI=None, window_size=50, num_bland=3):
+def get_spectrum(hdr_path, pix_coor, model, scaler, ROI=None, window_size=50, num_bland=3):
     """
     This function extracts and processes the spectrum of a specified pixel or a region of interest (ROI)
     from a given hyperspectral image. It performs pixel ratioing based on bland spectra or median spectra. 
@@ -190,7 +170,7 @@ def get_spectrum(hdr_path, pix_coor, ROI=None, window_size=50, num_bland=3):
         # ratioed_median
         line_pixels = if_[np.where(mat['x'] == pix_coor[0])[0]]
         median_spectra = np.median(line_pixels, axis=0)
-        ratioed_median = np.divide(unratioed, median_spectra, where=median_spectra!=0, out=np.full_like(unratioed, fill_value=np.nan))
+        ratioed_median = np.divide(unratioed, median_spectra, where=median_spectra!=0, out=np.full_like(unratioed, np.nan))
         
         # ratioed_bland
         x_indices = np.where(mat['x'] == pix_coor[0])[0]
@@ -212,7 +192,7 @@ def get_spectrum(hdr_path, pix_coor, ROI=None, window_size=50, num_bland=3):
         highest_proba_indices = np.argsort(window[:, 1])[-num_bland:]
         bland_indices = indices[highest_proba_indices]
         ave_bland = np.mean(if_[bland_indices], axis=0)
-        ratioed_bland = np.divide(unratioed, ave_bland, where=ave_bland!=0, out=np.full_like(unratioed, fill_value=np.nan))
+        ratioed_bland = np.divide(unratioed, ave_bland, where=ave_bland!=0, out=np.full_like(unratioed, np.nan))
 
     else:
         # unratioed
@@ -232,7 +212,7 @@ def get_spectrum(hdr_path, pix_coor, ROI=None, window_size=50, num_bland=3):
             median_spectrum = np.median(line_pixels, axis=0)
             region_indices = np.where((mat['x'] == i) & (mat['y'] >= y_min) & (mat['y'] <= y_max))[0]
             region_spectra = if_[region_indices].sum(axis=0)
-            ratioed_region_spectra = np.divide(region_spectra, median_spectrum, where=median_spectrum!=0, out=np.full_like(region_spectra, fill_value=np.nan))
+            ratioed_region_spectra = np.divide(region_spectra, median_spectrum, where=median_spectrum!=0, out=np.full_like(region_spectra, np.nan))
             ratioed_spectra_median = np.vstack((ratioed_spectra_median, ratioed_region_spectra))
         ratioed_median = np.mean(ratioed_spectra_median, axis=0)
         
@@ -251,7 +231,7 @@ def get_spectrum(hdr_path, pix_coor, ROI=None, window_size=50, num_bland=3):
                 ave_bland = np.mean(if_[bland_indices], axis=0)
                 pixel_index = np.where((mat['x'] == i) & (mat['y'] == j))[0]
                 pixel_spectra = if_[pixel_index][0]
-                ratioed_pixel_spectra = np.divide(pixel_spectra, ave_bland, where=ave_bland!=0, out=np.full_like(pixel_spectra, fill_value=np.nan))
+                ratioed_pixel_spectra = np.divide(pixel_spectra, ave_bland, where=ave_bland!=0, out=np.full_like(pixel_spectra, np.nan))
                 ratioed_spectra_bland = np.vstack((ratioed_spectra_bland, ratioed_pixel_spectra))
         ratioed_bland = np.mean(ratioed_spectra_bland, axis=0)
 

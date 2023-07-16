@@ -1,13 +1,17 @@
 name: crism
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.7
-  - scipy
+  - python
   - numpy
+  - pandas
   - matplotlib
-  - spectral
+  - ipykernel
+  - ipython
+  - gdown
   - scikit-learn
   - imbalanced-learn
-  - pandas
+  - spectral
+  - scipy
+  - jupyterlab
+  - notebook
