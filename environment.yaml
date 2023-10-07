@@ -1,0 +1,17 @@
+name: irp-crism
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - pandas
+  - matplotlib
+  - ipykernel
+  - ipython
+  - gdown
+  - scikit-learn
+  - imbalanced-learn
+  - spectral
+  - scipy
+  - jupyterlab
+  - notebook
