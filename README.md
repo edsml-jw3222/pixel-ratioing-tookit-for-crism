@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This tool utilizes the Random Forest model to predict bland pixels and applies pixel ratioing to reduce spectral noise, with the aim of enhancing spectral features.
+This tool utilizes a machine learning model to predict bland pixels and applies pixel ratioing to reduce spectral noise, with the aim of enhancing spectral features.
 
 ## Usage
 
